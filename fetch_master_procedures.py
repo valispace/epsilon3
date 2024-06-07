@@ -15,12 +15,12 @@ procedures_url = 'https://api.epsilon3.io/v1/procedures/summary'
 # Change the following values based on your specific use case
 
 VALISPACE = {
-    "domain": "https://epsilon3.valispace.com/",  # Base URL for the Valispace instance
+    "domain": "http://valispace",  # Base URL for the Valispace instance, if the deployment is an onprem deployment this should be set to "hhtp://valispace"
     "warn_https": False,  # Disable HTTPS warnings if set to False
 }
 
-# Valispace deployment and login info
-project_id = 27
+# Define project id
+project_id = 24
 
 
 # set the request headers with the API key for authentication

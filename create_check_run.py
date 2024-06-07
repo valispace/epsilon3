@@ -13,11 +13,12 @@ e3_endpoint = {
     }
 
 VALISPACE = {
-    "domain": "https://epsilon3.valispace.com/",  # Base URL for the Valispace instance
+    "domain": "http://valispace",  # Base URL for the Valispace instance, if the deployment is an onprem deployment this should be set to "hhtp://valispace"
     "warn_https": False,  # Disable HTTPS warnings if set to False
 }
 
-project_id = 27
+# Define project id
+project_id = 24
 
 # ---------------------------------------------
 
@@ -35,7 +36,40 @@ def initialize_api(temporary_access_token) -> API:
         warn_https=VALISPACE.get("warn_https", False)
     )
 
+def fetch_vm_id(api, project_id):
+    """
+    Fetches the ID of the Verification Method with the name 'Epsilon3 Test' from the given project.
+    If it doesn't exist, creates it and returns the new ID.
 
+    Parameters:
+    api (object): The API client instance to make requests.
+    project_id (int): The ID of the project from which to fetch or create the Verification Method.
+
+    Returns:
+    int: The ID of the 'Epsilon3 Test' Verification Method.
+    """
+    # Fetch all verification methods for the project
+    response = api.request("POST", 'requirements/verification-methods/search/', {
+        "query_filters": {"project_id": project_id},
+        "size": -1
+    })
+
+    # Extract the list of verification methods
+    verification_methods = response.get("data", [])
+
+    # Search for the verification method with the name 'Epsilon3 Test'
+    for vm in verification_methods:
+        if vm.get("name") == "Epsilon3 Test":
+            return vm.get("id")
+
+    # If not found, create a new verification method with the name 'Epsilon3 Test'
+    create_response = api.request("POST", 'requirements/component-vms/', {
+        "project": project_id,
+        "name": "Epsilon3 Test"
+    })
+
+    # Return the ID of the newly created verification method
+    return create_response.get("id")
 
 def create_e3_run(api, run_url, procedure_id, run_name):
     # set the request headers with the API key for authentication
@@ -96,7 +130,7 @@ def categorize_e3files(api, file_list):
 
     return e3_files
 
-def create_run_and_replace(api, procedures, run_url):
+def create_run_and_replace(api, procedures, run_url, vm_id):
     """
     Iterates through the list of procedures and creates runs in E3, 
     places them in Valispace symbolic files and replaces these files
@@ -144,7 +178,7 @@ def create_run_and_replace(api, procedures, run_url):
         
         #     switch.append(api.request("PATCH",f'requirements/component-vms/{cvm["id"]}',{"object_id": e3_run['id']}))
         for cvm in procedure_cvm["data"]:
-            if cvm["verification_method"]==45:
+            if cvm["verification_method"]==vm_id:
                 try:
                     response = api.request("PATCH", f'requirements/component-vms/{cvm["id"]}/', {"object_id": e3_run['id']})
                     switch.append(response)
@@ -311,14 +345,19 @@ def main(**kwargs):
     # Authenticate with the API using the provided temporary access token from kwargs
     api = initialize_api(kwargs['temporary_access_token'])
 
-    
+    vm_id = fetch_vm_id(api, project_id)
+
+    print(f"vm_id: {vm_id}")
+
     # Fetch all close-out reference files belonging to an "Epsilon3 Test" Verification Method
     e3_closeout_files_all = api.request("POST",'requirements/component-vms/search/',{
-    "query_filters": {"content_type": 171, "method__method_id": 45, "method__requirement__specification__project_id": 27},
+    "query_filters": {"content_type": 171, "method__method_id": vm_id, "method__requirement__specification__project_id": project_id},
     "includes": ["object_id"],
     })
 
     e3_closeout_files = e3_closeout_files_all['data']
+
+    print(e3_closeout_files)
 
     files_list = []
 
@@ -330,7 +369,7 @@ def main(**kwargs):
     # set the API endpoint URL
     run_url = e3_endpoint["runs"]
 
-    created_runs = create_run_and_replace(api, e3_files["procedures"], run_url)
+    created_runs = create_run_and_replace(api, e3_files["procedures"], run_url, vm_id)
 
     if created_runs:
         for created_run in created_runs:
